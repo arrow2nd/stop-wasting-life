@@ -4,6 +4,8 @@ Twitterを一定時間開いていると警告が出て、Twitterのタブを強
 
 <img width="1440" alt="image" src="https://github.com/user-attachments/assets/9f7892f4-d7c0-4a6a-9f71-5aad81f59ccb" />
 
+> [zipをダウンロード](https://github.com/arrow2nd/stop-wasting-life/archive/refs/heads/main.zip)
+
 ## 機能
 
 ### 🕐 タイマー機能
@@ -26,6 +28,8 @@ Twitterを一定時間開いていると警告が出て、Twitterのタブを強
 - オプションページで簡単設定
 
 ## インストール方法
+
+[zipをダウンロード](https://github.com/arrow2nd/stop-wasting-life/archive/refs/heads/main.zip) して展開、任意の場所に置いておく
 
 1. Chromeで `chrome://extensions/` を開く
 2. 右上の「デベロッパーモード」をONにする
