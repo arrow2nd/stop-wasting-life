@@ -33,8 +33,9 @@ chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  // Clear any alarms for this tab
+  // Clear any alarms and countdown data for this tab
   chrome.alarms.clear(`twitter-timer-${tabId}`);
+  chrome.storage.local.remove([`countdown-${tabId}`, `twitter-timer-${tabId}`]);
 });
 
 async function handleTwitterTab(tabId, tab) {
@@ -48,8 +49,31 @@ async function handleTwitterTab(tabId, tab) {
     return;
   }
 
+  // Check if there's an existing countdown for this tab
+  const existingCountdown = await chrome.storage.local.get([`countdown-${tabId}`]);
+  
+  if (existingCountdown[`countdown-${tabId}`]) {
+    // Resume existing countdown
+    const countdownData = existingCountdown[`countdown-${tabId}`];
+    chrome.tabs.sendMessage(tabId, {
+      action: "resumeCountdown",
+      endTime: countdownData.endTime,
+    });
+    return;
+  }
+
   const settings = await chrome.storage.sync.get(["timeLimit"]);
   const timeLimit = settings.timeLimit || DEFAULT_TIME_LIMIT;
+  const endTime = now + timeLimit;
+
+  // Store countdown data
+  chrome.storage.local.set({
+    [`countdown-${tabId}`]: { 
+      endTime: endTime,
+      domain: domain,
+      startTime: now
+    }
+  });
 
   // Send the time limit to content script to start countdown
   chrome.tabs.sendMessage(tabId, {
@@ -79,8 +103,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     blockedUntil.set(domain, Date.now() + COOLDOWN_PERIOD);
     chrome.tabs.remove(tabId);
 
-    // Clear the alarm for this tab
+    // Clear the alarm and countdown data for this tab
     chrome.alarms.clear(`twitter-timer-${tabId}`);
+    chrome.storage.local.remove([`countdown-${tabId}`, `twitter-timer-${tabId}`]);
   }
 });
 

@@ -6,7 +6,8 @@
   "permissions": [
     "tabs",
     "storage",
-    "alarms"
+    "alarms",
+    "scripting"
   ],
   "host_permissions": [
     "*://twitter.com/*",

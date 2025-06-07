@@ -2,6 +2,7 @@ let countdownInterval;
 let timerOverlay;
 let vignetteOverlay;
 let countdownEndTime;
+let currentUrl = window.location.href;
 
 function formatTime(milliseconds) {
   const seconds = Math.floor(milliseconds / 1000);
@@ -13,9 +14,9 @@ function formatTime(milliseconds) {
 }
 
 function createVignetteOverlay() {
-  // Remove existing vignette if any
-  if (vignetteOverlay) {
-    vignetteOverlay.remove();
+  // Don't create if already exists or if we're currently navigating
+  if (vignetteOverlay || isNavigating) {
+    return;
   }
 
   // Create vignette element
@@ -97,11 +98,26 @@ function updateVignette(remainingSeconds) {
   }
 }
 
-function createTimerOverlay() {
-  // Remove existing overlay if any
-  if (timerOverlay) {
-    timerOverlay.remove();
+function isTwitterDarkMode() {
+  const cookies = document.cookie.split(';');
+  for (let cookie of cookies) {
+    const [name, value] = cookie.trim().split('=');
+    if (name === 'night_mode') {
+      return value !== '0';
+    }
   }
+  return false;
+}
+
+function createTimerOverlay() {
+  // Don't create if already exists or if we're currently navigating
+  if (timerOverlay || isNavigating) {
+    return;
+  }
+
+  // Detect Twitter dark mode from cookie
+  const isDarkMode = isTwitterDarkMode();
+  const timerColor = isDarkMode ? '#ffffff' : '#000000';
 
   // Create overlay element
   timerOverlay = document.createElement("div");
@@ -113,7 +129,7 @@ function createTimerOverlay() {
     transform: translate(-50%, -50%);
     font-size: 20vw;
     font-weight: bold;
-    color: #000000;
+    color: ${timerColor};
     z-index: 999999;
     opacity: 0.3;
     pointer-events: none;
@@ -174,10 +190,75 @@ function startCountdown(timeLimit) {
 
       // Change color when under 30 seconds
       const seconds = Math.floor(remainingTime / 1000);
+      const isDarkMode = isTwitterDarkMode();
+      
       if (seconds <= 30) {
         timerOverlay.style.color = "#FF6B6B";
       } else {
-        timerOverlay.style.color = "#000000";
+        timerOverlay.style.color = isDarkMode ? "#ffffff" : "#000000";
+      }
+
+      // Update vignette effect
+      updateVignette(seconds);
+    }
+  }
+
+  // Update immediately
+  updateCountdown();
+
+  // Update every 100ms for more accurate display
+  countdownInterval = setInterval(updateCountdown, 100);
+}
+
+function resumeCountdown(endTime) {
+  const now = Date.now();
+  const remainingTime = Math.max(0, endTime - now);
+  
+  if (remainingTime <= 0) {
+    // Countdown already finished
+    return;
+  }
+
+  createTimerOverlay();
+  createVignetteOverlay();
+
+  // Store the end time
+  countdownEndTime = endTime;
+
+  // Clear any existing interval
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+  }
+
+  // Update function that uses actual time
+  function updateCountdown() {
+    const now = Date.now();
+    const remainingTime = Math.max(0, countdownEndTime - now);
+
+    if (remainingTime <= 0) {
+      clearInterval(countdownInterval);
+      if (timerOverlay) {
+        timerOverlay.remove();
+        timerOverlay = null;
+      }
+      if (vignetteOverlay) {
+        vignetteOverlay.remove();
+        vignetteOverlay = null;
+      }
+      return;
+    }
+
+    if (timerOverlay) {
+      timerOverlay.textContent = formatTime(remainingTime);
+
+      // Change color when under 30 seconds
+      const seconds = Math.floor(remainingTime / 1000);
+      const isDarkMode = isTwitterDarkMode();
+      
+      if (seconds <= 30) {
+        timerOverlay.style.color = "#FF6B6B";
+      } else {
+        timerOverlay.style.color = isDarkMode ? "#ffffff" : "#000000";
       }
 
       // Update vignette effect
@@ -195,6 +276,8 @@ function startCountdown(timeLimit) {
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "startCountdown") {
     startCountdown(request.timeLimit);
+  } else if (request.action === "resumeCountdown") {
+    resumeCountdown(request.endTime);
   } else if (request.action === "showWarning") {
     // Clear countdown when warning appears
     if (countdownInterval) {
@@ -218,6 +301,80 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
 });
 
+// Monitor URL changes for SPA navigation (Twitter/X uses SPA)
+let urlCheckTimeout;
+let isNavigating = false;
+
+function checkForUrlChange() {
+  if (window.location.href !== currentUrl) {
+    currentUrl = window.location.href;
+    isNavigating = true;
+    
+    // Clear any existing timeout
+    if (urlCheckTimeout) {
+      clearTimeout(urlCheckTimeout);
+    }
+    
+    // If countdown is active, preserve it across navigation
+    if (countdownEndTime && countdownInterval) {
+      const remainingTime = Math.max(0, countdownEndTime - Date.now());
+      if (remainingTime > 0) {
+        // Wait for navigation to complete before recreating overlays
+        urlCheckTimeout = setTimeout(() => {
+          if (!document.getElementById("stop-wasting-life-timer")) {
+            createTimerOverlay();
+          }
+          if (!document.getElementById("stop-wasting-life-vignette")) {
+            createVignetteOverlay();
+          }
+          isNavigating = false;
+        }, 500);
+      }
+    }
+  }
+}
+
+// Use MutationObserver for more efficient SPA navigation detection
+let navigationObserver;
+
+function setupNavigationObserver() {
+  if (navigationObserver) {
+    navigationObserver.disconnect();
+  }
+  
+  navigationObserver = new MutationObserver((mutations) => {
+    // Check if the page content has significantly changed
+    const hasSignificantChange = mutations.some(mutation => 
+      mutation.type === 'childList' && 
+      mutation.addedNodes.length > 5 // Threshold for significant DOM changes
+    );
+    
+    if (hasSignificantChange) {
+      checkForUrlChange();
+    }
+  });
+  
+  navigationObserver.observe(document.body, {
+    childList: true,
+    subtree: true
+  });
+}
+
+// Fallback: Check for URL changes every 500ms (reduced frequency)
+setInterval(checkForUrlChange, 500);
+
+// Start observing when DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', setupNavigationObserver);
+} else {
+  setupNavigationObserver();
+}
+
+// Also listen for popstate events (back/forward navigation)
+window.addEventListener("popstate", () => {
+  setTimeout(checkForUrlChange, 100);
+});
+
 // Clean up when page unloads
 window.addEventListener("beforeunload", () => {
   if (countdownInterval) {
@@ -228,6 +385,12 @@ window.addEventListener("beforeunload", () => {
   }
   if (vignetteOverlay) {
     vignetteOverlay.remove();
+  }
+  if (navigationObserver) {
+    navigationObserver.disconnect();
+  }
+  if (urlCheckTimeout) {
+    clearTimeout(urlCheckTimeout);
   }
 });
 
