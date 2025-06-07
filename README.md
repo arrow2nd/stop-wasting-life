@@ -2,9 +2,9 @@
 
 Twitterを一定時間開いていると警告が出て、Twitterのタブを強制的に閉じるChrome拡張機能です。
 
-<img width="1440" alt="image" src="https://github.com/user-attachments/assets/9f7892f4-d7c0-4a6a-9f71-5aad81f59ccb" />
-
 > [zipをダウンロード](https://github.com/arrow2nd/stop-wasting-life/archive/refs/heads/main.zip)
+
+<img width="1440" alt="image" src="https://github.com/user-attachments/assets/9f7892f4-d7c0-4a6a-9f71-5aad81f59ccb" />
 
 ## 機能
 
