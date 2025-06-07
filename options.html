@@ -39,9 +39,27 @@
       border-radius: 4px;
       cursor: pointer;
       font-size: 16px;
+      margin: 5px;
     }
     button:hover {
       background-color: #FF5252;
+    }
+    button:disabled {
+      background-color: #cccccc;
+      cursor: not-allowed;
+    }
+    small {
+      color: #666666;
+      font-size: 12px;
+      display: block;
+      margin-top: 2px;
+    }
+    h3 {
+      color: #FF6B6B;
+      margin: 15px 0 10px 0;
+    }
+    .dark-mode small {
+      color: #aaaaaa;
     }
     #status {
       margin-top: 10px;
@@ -61,17 +79,53 @@
       color: #e0e0e0 !important;
       border-color: #555555 !important;
     }
+    .usage-info {
+      background-color: #f5f5f5;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+    }
+    .dark-mode .usage-info {
+      background-color: #2a2a2a;
+    }
+    .warning {
+      color: #ff9800;
+      font-weight: bold;
+    }
+    .danger {
+      color: #f44336;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <h1>STOP WASTING LIFE</h1>
   
   <div class="setting-group">
-    <label for="timeLimit">制限時間（秒）:</label>
+    <label for="timeLimit">セッション制限時間（秒）:</label>
     <input type="number" id="timeLimit" min="1" max="3600" value="180" step="1">
+    <small>一度にTwitter/Xを開いていられる時間</small>
   </div>
   
-  <button id="save">保存</button>
+  <div class="setting-group">
+    <label for="dailyLimit">日次制限時間（分）:</label>
+    <input type="number" id="dailyLimit" min="1" max="1440" value="15" step="1">
+    <small>一日に使用できる合計時間</small>
+  </div>
+  
+  <div class="setting-group">
+    <h3>今日の使用状況</h3>
+    <div id="dailyUsage">読み込み中...</div>
+    <div id="violationCount"></div>
+    <div id="blockStatus"></div>
+  </div>
+  
+  <div class="setting-group">
+    <button id="resetDaily">今日の使用時間をリセット</button>
+    <button id="resetViolations">違反回数をリセット</button>
+  </div>
+  
+  <button id="save">設定を保存</button>
   
   <div id="status">設定を保存しました！</div>
   

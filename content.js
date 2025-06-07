@@ -375,6 +375,108 @@ window.addEventListener("popstate", () => {
   setTimeout(checkForUrlChange, 100);
 });
 
+// Anti-circumvention measures
+let pageHiddenTime = 0;
+let lastVisibilityChange = Date.now();
+let devToolsOpen = false;
+let windowFocused = true;
+
+// Detect when page becomes hidden (tab switching, minimizing, etc.)
+document.addEventListener('visibilitychange', () => {
+  const now = Date.now();
+  
+  if (document.hidden) {
+    lastVisibilityChange = now;
+  } else {
+    // If page was hidden for significant time, add penalty
+    const hiddenDuration = now - lastVisibilityChange;
+    pageHiddenTime += hiddenDuration;
+    
+    // Report suspicious behavior if hidden for more than 30 seconds during countdown
+    if (hiddenDuration > 30000 && countdownEndTime && countdownEndTime > now) {
+      chrome.runtime.sendMessage({ 
+        action: 'reportSuspiciousActivity', 
+        type: 'pageHidden',
+        duration: hiddenDuration 
+      });
+    }
+  }
+});
+
+// Detect window focus changes
+window.addEventListener('focus', () => {
+  windowFocused = true;
+});
+
+window.addEventListener('blur', () => {
+  windowFocused = false;
+  
+  // If countdown is active and window loses focus, report it
+  if (countdownEndTime && countdownEndTime > Date.now()) {
+    chrome.runtime.sendMessage({ 
+      action: 'reportSuspiciousActivity', 
+      type: 'windowBlur'
+    });
+  }
+});
+
+// Detect potential developer tools usage
+const threshold = 160;
+setInterval(() => {
+  if (window.outerHeight - window.innerHeight > threshold || 
+      window.outerWidth - window.innerWidth > threshold) {
+    if (!devToolsOpen) {
+      devToolsOpen = true;
+      chrome.runtime.sendMessage({ 
+        action: 'reportSuspiciousActivity', 
+        type: 'devToolsOpen'
+      });
+    }
+  } else {
+    devToolsOpen = false;
+  }
+}, 1000);
+
+// Detect multiple Twitter/X tabs
+chrome.runtime.sendMessage({ action: 'checkMultipleTabs' });
+
+// Monitor for URL manipulation attempts
+let originalUrl = window.location.href;
+const urlObserver = new MutationObserver(() => {
+  if (window.location.href !== originalUrl) {
+    const newUrl = window.location.href;
+    if (!newUrl.includes('twitter.com') && !newUrl.includes('x.com')) {
+      // User tried to navigate away from Twitter/X
+      chrome.runtime.sendMessage({ 
+        action: 'reportSuspiciousActivity', 
+        type: 'urlManipulation',
+        from: originalUrl,
+        to: newUrl
+      });
+    }
+    originalUrl = newUrl;
+  }
+});
+
+urlObserver.observe(document, { subtree: true, childList: true });
+
+// Block certain key combinations that could be used to circumvent
+document.addEventListener('keydown', (e) => {
+  // Block Ctrl+W (close tab), Ctrl+T (new tab), etc. during active countdown
+  if (countdownEndTime && countdownEndTime > Date.now()) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 't' || e.key === 'n')) {
+      e.preventDefault();
+      e.stopPropagation();
+      chrome.runtime.sendMessage({ 
+        action: 'reportSuspiciousActivity', 
+        type: 'blockedShortcut',
+        key: e.key
+      });
+      return false;
+    }
+  }
+});
+
 // Clean up when page unloads
 window.addEventListener("beforeunload", () => {
   if (countdownInterval) {
@@ -391,6 +493,9 @@ window.addEventListener("beforeunload", () => {
   }
   if (urlCheckTimeout) {
     clearTimeout(urlCheckTimeout);
+  }
+  if (urlObserver) {
+    urlObserver.disconnect();
   }
 });
 
