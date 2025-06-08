@@ -312,6 +312,18 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     const blockedUntil = data.blockedUntil || {};
     const violationCount = (data.violationCount || 0) + 1;
 
+    // Send time expired violation notification
+    try {
+      await chrome.tabs.sendMessage(tabId, {
+        action: "showViolationNotification",
+        violationType: "timeExpired",
+        message: "制限時間に到達しました。 (+1点)",
+        violationCount: violationCount
+      });
+    } catch (error) {
+      // Tab might not exist anymore
+    }
+
     // Set block with escalating cooldown
     let cooldownPeriod = COOLDOWN_PERIOD;
     if (violationCount >= 5) {
@@ -373,34 +385,29 @@ async function handleSuspiciousActivity(request, sender) {
   }
 
   let newViolationCount = violationCount;
+  let violationMessage = '';
+  let addedPoints = 0;
 
   // Assign penalty based on activity type
   switch (request.type) {
     case "devToolsOpen":
-      newViolationCount += 2; // Severe penalty
+      addedPoints = 2;
+      newViolationCount += addedPoints;
+      violationMessage = '開発者ツールの使用を検出しました。';
       break;
     case "pageHidden":
       if (request.duration > 60000) { // Hidden for more than 1 minute
-        newViolationCount += 1;
+        addedPoints = 1;
+        newViolationCount += addedPoints;
+        violationMessage = `ページを${Math.floor(request.duration / 1000)}秒間隠していました。`;
       }
-      break;
-    case "urlManipulation":
-      newViolationCount += 3; // Very severe penalty
       break;
     case "blockedShortcut":
-      newViolationCount += 1;
+      addedPoints = 1;
+      newViolationCount += addedPoints;
+      violationMessage = `ショートカットキー（${request.key}）のブロックを検出しました。`;
       break;
-    case "windowBlur":
-      // Minor penalty, only if frequent
-      const recentBlurs = suspiciousActivity.filter(
-        (activity) =>
-          activity.type === "windowBlur" &&
-          Date.now() - activity.timestamp < 300000, // Last 5 minutes
-      ).length;
-      if (recentBlurs > 5) {
-        newViolationCount += 1;
-      }
-      break;
+    // Removed windowBlur and urlManipulation violations
   }
 
   await chrome.storage.local.set({
@@ -408,19 +415,26 @@ async function handleSuspiciousActivity(request, sender) {
     suspiciousActivity,
   });
 
-  // If too many violations, activate strict mode immediately
+  // Send notification to the tab if violation was added
+  if (addedPoints > 0) {
+    try {
+      await chrome.tabs.sendMessage(sender.tab.id, {
+        action: "showViolationNotification",
+        violationType: request.type,
+        message: violationMessage + ` (+${addedPoints}点)`,
+        violationCount: newViolationCount
+      });
+    } catch (error) {
+      // Tab might not exist anymore
+    }
+  }
+
+  // If too many violations, activate extended strict mode
   if (newViolationCount >= 10) {
-    const blockedUntil = data.blockedUntil || {};
-    blockedUntil["twitter.com"] = Date.now() + STRICT_MODE_COOLDOWN;
-    blockedUntil["x.com"] = Date.now() + STRICT_MODE_COOLDOWN;
-
+    // Extended strict mode - no immediate tab closure
     await chrome.storage.local.set({
-      blockedUntil,
-      strictModeUntil: Date.now() + STRICT_MODE_COOLDOWN,
+      strictModeUntil: Date.now() + STRICT_MODE_COOLDOWN * 2, // 4 hours strict mode for 10+ violations
     });
-
-    // Close ALL Twitter tabs immediately
-    await closeAllTwitterTabs();
   }
 }
 
@@ -608,15 +622,19 @@ async function closeAllTwitterTabs() {
 chrome.management.onDisabled.addListener(async (info) => {
   if (info.id === chrome.runtime.id) {
     // Save current session state before being disabled
-    const data = await chrome.storage.local.get(["globalSession"]);
+    const data = await chrome.storage.local.get(["globalSession", "violationCount"]);
     const now = Date.now();
+    const newViolationCount = (data.violationCount || 0) + 2;
 
     await chrome.storage.local.set({
       disabledAt: now,
-      violationCount:
-        ((await chrome.storage.local.get(["violationCount"])).violationCount ||
-          0) + 2,
+      violationCount: newViolationCount,
       sessionBeforeDisable: data.globalSession, // Preserve session
+      pendingViolationNotification: {
+        type: 'extensionDisabled',
+        message: '拡張機能の無効化を検出しました。 (+2点)',
+        count: newViolationCount
+      }
     });
   }
 });
@@ -627,6 +645,8 @@ chrome.management.onEnabled.addListener(async (info) => {
       "disabledAt",
       "blockedUntil",
       "sessionBeforeDisable",
+      "pendingViolationNotification",
+      "activeTwitterTabs"
     ]);
     if (data.disabledAt) {
       const disabledDuration = Date.now() - data.disabledAt;
@@ -652,7 +672,24 @@ chrome.management.onEnabled.addListener(async (info) => {
         });
       }
 
-      chrome.storage.local.remove(["disabledAt", "sessionBeforeDisable"]);
+      // Send pending violation notification to all active Twitter tabs
+      if (data.pendingViolationNotification && data.activeTwitterTabs) {
+        const notification = data.pendingViolationNotification;
+        for (const tabId of data.activeTwitterTabs) {
+          try {
+            await chrome.tabs.sendMessage(tabId, {
+              action: "showViolationNotification",
+              violationType: notification.type,
+              message: notification.message,
+              violationCount: notification.count
+            });
+          } catch (error) {
+            // Tab might not exist anymore
+          }
+        }
+      }
+
+      chrome.storage.local.remove(["disabledAt", "sessionBeforeDisable", "pendingViolationNotification"]);
     }
   }
 });

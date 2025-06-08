@@ -298,6 +298,9 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     chrome.runtime.sendMessage({ action: "closeTab" });
   } else if (request.action === "showBlockedMessage") {
     alert(request.message);
+  } else if (request.action === "showViolationNotification") {
+    // Show violation notification
+    showViolationNotification(request.violationType, request.message, request.violationCount);
   }
 });
 
@@ -403,21 +406,14 @@ document.addEventListener('visibilitychange', () => {
   }
 });
 
-// Detect window focus changes
+// Detect window focus changes (for tracking, not violations)
 window.addEventListener('focus', () => {
   windowFocused = true;
 });
 
 window.addEventListener('blur', () => {
   windowFocused = false;
-  
-  // If countdown is active and window loses focus, report it
-  if (countdownEndTime && countdownEndTime > Date.now()) {
-    chrome.runtime.sendMessage({ 
-      action: 'reportSuspiciousActivity', 
-      type: 'windowBlur'
-    });
-  }
+  // Window blur is no longer a violation
 });
 
 // Detect potential developer tools usage
@@ -440,21 +436,12 @@ setInterval(() => {
 // Detect multiple Twitter/X tabs
 chrome.runtime.sendMessage({ action: 'checkMultipleTabs' });
 
-// Monitor for URL manipulation attempts
+// Monitor for URL changes (for tracking, not violations)
 let originalUrl = window.location.href;
 const urlObserver = new MutationObserver(() => {
   if (window.location.href !== originalUrl) {
-    const newUrl = window.location.href;
-    if (!newUrl.includes('twitter.com') && !newUrl.includes('x.com')) {
-      // User tried to navigate away from Twitter/X
-      chrome.runtime.sendMessage({ 
-        action: 'reportSuspiciousActivity', 
-        type: 'urlManipulation',
-        from: originalUrl,
-        to: newUrl
-      });
-    }
-    originalUrl = newUrl;
+    originalUrl = window.location.href;
+    // URL manipulation is no longer a violation
   }
 });
 
@@ -476,6 +463,118 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+
+// Violation notification system
+function showViolationNotification(violationType, message, violationCount) {
+  // Create notification element
+  const notification = document.createElement('div');
+  notification.id = 'stop-wasting-life-violation-notification';
+  
+  // Get violation type in Japanese
+  const violationTypeJa = {
+    'devToolsOpen': '開発者ツールの使用',
+    'pageHidden': 'ページの非表示',
+    'windowBlur': 'ウィンドウのフォーカス外し',
+    'urlManipulation': 'URL操作の試み',
+    'blockedShortcut': 'ショートカットキーのブロック',
+    'extensionDisabled': '拡張機能の無効化',
+    'timeExpired': '制限時間到達'
+  }[violationType] || '不正行為';
+  
+  // Determine severity based on violation count
+  let bgColor, borderColor;
+  if (violationCount >= 10) {
+    bgColor = 'rgba(139, 0, 0, 0.95)'; // Dark red
+    borderColor = '#FF0000';
+  } else if (violationCount >= 5) {
+    bgColor = 'rgba(255, 140, 0, 0.95)'; // Dark orange
+    borderColor = '#FF8C00';
+  } else if (violationCount >= 3) {
+    bgColor = 'rgba(255, 165, 0, 0.95)'; // Orange
+    borderColor = '#FFA500';
+  } else {
+    bgColor = 'rgba(255, 215, 0, 0.95)'; // Gold
+    borderColor = '#FFD700';
+  }
+  
+  notification.style.cssText = `
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    max-width: 400px;
+    padding: 20px;
+    background: ${bgColor};
+    color: white;
+    border: 3px solid ${borderColor};
+    border-radius: 10px;
+    font-family: Arial, sans-serif;
+    font-size: 16px;
+    z-index: 2147483647;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    animation: slideIn 0.3s ease-out, shake 0.5s ease-in-out 0.3s;
+    cursor: pointer;
+  `;
+  
+  notification.innerHTML = `
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">⚠️ 違反検出</div>
+    <div style="margin-bottom: 8px;">種類: ${violationTypeJa}</div>
+    <div style="margin-bottom: 12px;">${message}</div>
+    <div style="font-size: 14px; opacity: 0.9;">累計違反回数: ${violationCount}回</div>
+    ${violationCount >= 10 ? '<div style="font-size: 14px; margin-top: 8px; font-weight: bold;">⚡ 10回以上の違反により4時間の厳格モードが適用されます</div>' : ''}
+    ${violationCount >= 5 && violationCount < 10 ? '<div style="font-size: 14px; margin-top: 8px;">🔒 5回以上の違反により厳格モードが適用されます</div>' : ''}
+    ${violationCount >= 3 && violationCount < 5 ? '<div style="font-size: 14px; margin-top: 8px;">⏰ 3回以上の違反によりクールダウンが延長されます</div>' : ''}
+  `;
+  
+  // Add click to dismiss
+  notification.addEventListener('click', () => {
+    notification.style.animation = 'slideOut 0.3s ease-in';
+    setTimeout(() => notification.remove(), 300);
+  });
+  
+  // Add animations
+  if (!document.getElementById('stop-wasting-life-violation-styles')) {
+    const style = document.createElement('style');
+    style.id = 'stop-wasting-life-violation-styles';
+    style.textContent = `
+      @keyframes slideIn {
+        from {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+        to {
+          transform: translateX(0);
+          opacity: 1;
+        }
+      }
+      @keyframes slideOut {
+        from {
+          transform: translateX(0);
+          opacity: 1;
+        }
+        to {
+          transform: translateX(100%);
+          opacity: 0;
+        }
+      }
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+        20%, 40%, 60%, 80% { transform: translateX(5px); }
+      }
+    `;
+    document.head.appendChild(style);
+  }
+  
+  document.body.appendChild(notification);
+  
+  // Auto-remove after 10 seconds
+  setTimeout(() => {
+    if (document.getElementById('stop-wasting-life-violation-notification')) {
+      notification.style.animation = 'slideOut 0.3s ease-in';
+      setTimeout(() => notification.remove(), 300);
+    }
+  }, 10000);
+}
 
 // Clean up when page unloads
 window.addEventListener("beforeunload", () => {
