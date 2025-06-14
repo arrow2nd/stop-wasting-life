@@ -12,6 +12,6 @@
   "author": "arrow2nd",
   "license": "MIT",
   "devDependencies": {
-    "rimraf": "^5.0.0"
+    "rimraf": "^6.0.0"
   }
 }
