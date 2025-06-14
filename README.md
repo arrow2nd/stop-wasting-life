@@ -1,6 +1,6 @@
 # STOP WASTING LIFE
 
-Twitterを一定時間開いていると警告が出て、Twitterのタブを強制的に閉じるChrome拡張機能です。
+Twitterを一定時間開いていると警告が出て、Twitterのタブを強制的に閉じるブラウザ拡張機能です。Chrome・Firefox両方で動作します。
 
 > [zipをダウンロード](https://github.com/arrow2nd/stop-wasting-life/archive/refs/heads/main.zip)
 
@@ -36,10 +36,35 @@ Twitterを一定時間開いていると警告が出て、Twitterのタブを強
 
 [zipをダウンロード](https://github.com/arrow2nd/stop-wasting-life/archive/refs/heads/main.zip) して展開、任意の場所に置いておく
 
+### Chrome版
+
 1. Chromeで `chrome://extensions/` を開く
 2. 右上の「デベロッパーモード」をONにする
 3. 「パッケージ化されていない拡張機能を読み込む」をクリック
 4. このプロジェクトのフォルダを選択
+
+### Firefox版
+
+1. ターミナル/コマンドプロンプトでプロジェクトフォルダに移動
+2. Firefox版をビルド：
+   ```bash
+   npm install
+   npm run build:firefox
+   ```
+3. Firefoxで `about:debugging` を開く
+4. 「このFirefox」をクリック
+5. 「一時的なアドオンを読み込む」をクリック
+6. `firefox-build` フォルダ内の `manifest.json` を選択
+
+または、パッケージされたzipファイルを使用する場合：
+1. 上記手順でビルド後、`firefox-build.zip` が生成されます
+2. Firefoxで `about:addons` を開く
+3. 歯車アイコン → 「ファイルからアドオンをインストール」
+4. `firefox-build.zip` を選択
+
+> **注意**: Firefox版は一時的なアドオンとしてのみインストール可能です。Firefoxを再起動すると削除されます。永続的に使用する場合は、Firefox Add-ons Developer Hubでの署名が必要です。
+
+詳細なFirefox版のビルド方法は [README_FIREFOX.md](README_FIREFOX.md) を参照してください。
 
 ## 対応サイト
 

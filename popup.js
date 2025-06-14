@@ -1,8 +1,10 @@
+// Cross-browser compatibility
+const browserAPI = typeof browser !== "undefined" ? browser : chrome;
 function isTwitterDarkMode() {
   // Get Twitter cookie from background script
-  chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+  browserAPI.tabs.query({active: true, currentWindow: true}, (tabs) => {
     if (tabs[0] && (tabs[0].url.includes('twitter.com') || tabs[0].url.includes('x.com'))) {
-      chrome.scripting.executeScript({
+      browserAPI.scripting.executeScript({
         target: {tabId: tabs[0].id},
         func: () => {
           const cookies = document.cookie.split(';');
@@ -25,7 +27,7 @@ function isTwitterDarkMode() {
 
 document.getElementById('options').addEventListener('click', (e) => {
   e.preventDefault();
-  chrome.runtime.openOptionsPage();
+  browserAPI.runtime.openOptionsPage();
 });
 
 // Check for dark mode when popup opens

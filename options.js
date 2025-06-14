@@ -1,8 +1,10 @@
+// Cross-browser compatibility
+const browserAPI = typeof browser !== "undefined" ? browser : chrome;
 function isTwitterDarkMode() {
   // Get Twitter cookie from background script
-  chrome.tabs.query({active: true, currentWindow: true}, (tabs) => {
+  browserAPI.tabs.query({active: true, currentWindow: true}, (tabs) => {
     if (tabs[0] && (tabs[0].url.includes('twitter.com') || tabs[0].url.includes('x.com'))) {
-      chrome.scripting.executeScript({
+      browserAPI.scripting.executeScript({
         target: {tabId: tabs[0].id},
         func: () => {
           const cookies = document.cookie.split(';');
@@ -30,7 +32,7 @@ function formatTime(milliseconds) {
 }
 
 async function updateUsageDisplay() {
-  const data = await chrome.storage.local.get([
+  const data = await browserAPI.storage.local.get([
     'dailyUsage', 'violationCount', 'blockedUntil', 'strictModeUntil'
   ]);
   
@@ -42,7 +44,7 @@ async function updateUsageDisplay() {
   
   // Update daily usage display
   const usageDiv = document.getElementById('dailyUsage');
-  const dailyLimitMs = (await chrome.storage.sync.get(['dailyLimit'])).dailyLimit || (15 * 60 * 1000);
+  const dailyLimitMs = (await browserAPI.storage.sync.get(['dailyLimit'])).dailyLimit || (15 * 60 * 1000);
   const usagePercent = Math.round((dailyUsage / dailyLimitMs) * 100);
   
   let usageClass = '';
@@ -98,7 +100,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   isTwitterDarkMode();
   
   // Load saved settings
-  const syncSettings = await chrome.storage.sync.get(['timeLimit', 'dailyLimit']);
+  const syncSettings = await browserAPI.storage.sync.get(['timeLimit', 'dailyLimit']);
   if (syncSettings.timeLimit) {
     timeLimitInput.value = syncSettings.timeLimit / 1000; // Convert to seconds
   }
@@ -116,7 +118,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const timeLimit = parseInt(timeLimitInput.value) * 1000; // Convert to milliseconds
     const dailyLimit = parseInt(dailyLimitInput.value) * 60 * 1000; // Convert to milliseconds
     
-    await chrome.storage.sync.set({ timeLimit, dailyLimit });
+    await browserAPI.storage.sync.set({ timeLimit, dailyLimit });
     
     statusDiv.style.display = 'block';
     setTimeout(() => {
@@ -125,7 +127,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   
   resetDailyButton.addEventListener('click', async () => {
-    await chrome.storage.local.set({ dailyUsage: 0 });
+    await browserAPI.storage.local.set({ dailyUsage: 0 });
     await updateUsageDisplay();
     statusDiv.textContent = '使用時間をリセットしました';
     statusDiv.style.display = 'block';
@@ -135,7 +137,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
   
   resetViolationsButton.addEventListener('click', async () => {
-    await chrome.storage.local.set({ 
+    await browserAPI.storage.local.set({ 
       violationCount: 0,
       blockedUntil: {},
       strictModeUntil: 0

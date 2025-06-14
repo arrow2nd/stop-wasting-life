@@ -24,12 +24,15 @@ function getRandomMessage(messages) {
 }
 
 // Initialize storage on startup
-chrome.runtime.onStartup.addListener(initializeStorage);
-chrome.runtime.onInstalled.addListener(initializeStorage);
+// Cross-browser compatibility
+const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+
+browserAPI.runtime.onStartup.addListener(initializeStorage);
+browserAPI.runtime.onInstalled.addListener(initializeStorage);
 
 // Restore global session on startup
-chrome.runtime.onStartup.addListener(async () => {
-  const data = await chrome.storage.local.get([
+browserAPI.runtime.onStartup.addListener(async () => {
+  const data = await browserAPI.storage.local.get([
     "globalSession",
     "activeTwitterTabs",
     "sessionBackup",
@@ -39,7 +42,7 @@ chrome.runtime.onStartup.addListener(async () => {
   // Check if we have a session backup from crash/shutdown
   if (data.sessionBackup && data.sessionBackup.endTime > Date.now()) {
     // Restore from backup
-    await chrome.storage.local.set({ globalSession: data.sessionBackup });
+    await browserAPI.storage.local.set({ globalSession: data.sessionBackup });
 
     // If there was recent activity (within last 10 seconds before shutdown), restore session
     if (data.lastUsageUpdate && Date.now() - data.lastUsageUpdate < 10000) {
@@ -47,7 +50,7 @@ chrome.runtime.onStartup.addListener(async () => {
 
       const remainingTime = data.sessionBackup.endTime - Date.now();
       if (remainingTime > 0) {
-        chrome.alarms.create("global-twitter-timer", {
+        browserAPI.alarms.create("global-twitter-timer", {
           delayInMinutes: remainingTime / (60 * 1000),
         });
       }
@@ -59,7 +62,7 @@ chrome.runtime.onStartup.addListener(async () => {
     // Re-establish global timer alarm
     const remainingTime = data.globalSession.endTime - Date.now();
     if (remainingTime > 0) {
-      chrome.alarms.create("global-twitter-timer", {
+      browserAPI.alarms.create("global-twitter-timer", {
         delayInMinutes: remainingTime / (60 * 1000),
       });
     }
@@ -71,14 +74,14 @@ chrome.runtime.onStartup.addListener(async () => {
 
 // Clean up stale data that might persist from improper Chrome shutdown
 async function cleanupStaleData() {
-  const data = await chrome.storage.local.get([
+  const data = await browserAPI.storage.local.get([
     "globalSession",
     "activeTwitterTabs",
   ]);
 
   // If there are active tabs listed but session expired, clean up
   if (data.globalSession && data.globalSession.endTime <= Date.now()) {
-    await chrome.storage.local.remove([
+    await browserAPI.storage.local.remove([
       "globalSession",
       "global-twitter-timer",
     ]);
@@ -89,7 +92,7 @@ async function cleanupStaleData() {
     const validTabs = [];
     for (const tabId of data.activeTwitterTabs) {
       try {
-        const tab = await chrome.tabs.get(tabId);
+        const tab = await browserAPI.tabs.get(tabId);
         if (
           tab && (tab.url.includes("twitter.com") || tab.url.includes("x.com"))
         ) {
@@ -99,22 +102,22 @@ async function cleanupStaleData() {
         // Tab doesn't exist
       }
     }
-    await chrome.storage.local.set({ activeTwitterTabs: validTabs });
+    await browserAPI.storage.local.set({ activeTwitterTabs: validTabs });
 
     // If no valid tabs but session exists, clear session
     if (validTabs.length === 0 && data.globalSession) {
-      await chrome.storage.local.remove([
+      await browserAPI.storage.local.remove([
         "globalSession",
         "global-twitter-timer",
       ]);
-      chrome.alarms.clear("global-twitter-timer");
+      browserAPI.alarms.clear("global-twitter-timer");
     }
   }
 }
 
 async function initializeStorage() {
   const today = new Date().toDateString();
-  const data = await chrome.storage.local.get([
+  const data = await browserAPI.storage.local.get([
     "dailyUsage",
     "blockedUntil",
     "lastActiveDate",
@@ -124,7 +127,7 @@ async function initializeStorage() {
 
   // Reset daily usage if it's a new day
   if (data.lastActiveDate !== today) {
-    await chrome.storage.local.set({
+    await browserAPI.storage.local.set({
       dailyUsage: 0,
       lastActiveDate: today,
       blockedUntil: {}, // Reset blocks on new day
@@ -139,7 +142,7 @@ async function initializeStorage() {
   if (!data.activeTwitterTabs) updates.activeTwitterTabs = [];
 
   if (Object.keys(updates).length > 0) {
-    await chrome.storage.local.set(updates);
+    await browserAPI.storage.local.set(updates);
   }
 
   // Clean up stale active tabs on startup
@@ -147,17 +150,17 @@ async function initializeStorage() {
     const validTabs = [];
     for (const tabId of data.activeTwitterTabs) {
       try {
-        await chrome.tabs.get(tabId);
+        await browserAPI.tabs.get(tabId);
         validTabs.push(tabId);
       } catch (error) {
         // Tab doesn't exist anymore
       }
     }
-    await chrome.storage.local.set({ activeTwitterTabs: validTabs });
+    await browserAPI.storage.local.set({ activeTwitterTabs: validTabs });
   }
 }
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+browserAPI.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (
     changeInfo.status === "complete" && tab.url &&
     (tab.url.includes("twitter.com") || tab.url.includes("x.com"))
@@ -167,21 +170,21 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   }
 });
 
-chrome.tabs.onRemoved.addListener(async (tabId) => {
+browserAPI.tabs.onRemoved.addListener(async (tabId) => {
   // Remove tab from active tabs list
-  const data = await chrome.storage.local.get([
+  const data = await browserAPI.storage.local.get([
     "activeTwitterTabs",
     "globalSession",
   ]);
   const activeTwitterTabs = data.activeTwitterTabs || [];
   const updatedTabs = activeTwitterTabs.filter((id) => id !== tabId);
 
-  await chrome.storage.local.set({ activeTwitterTabs: updatedTabs });
+  await browserAPI.storage.local.set({ activeTwitterTabs: updatedTabs });
 
   // If no more active Twitter tabs, clear global session
   if (updatedTabs.length === 0) {
-    chrome.alarms.clear("global-twitter-timer");
-    await chrome.storage.local.remove([
+    browserAPI.alarms.clear("global-twitter-timer");
+    await browserAPI.storage.local.remove([
       "globalSession",
       "global-twitter-timer",
     ]);
@@ -189,8 +192,8 @@ chrome.tabs.onRemoved.addListener(async (tabId) => {
   }
 
   // Legacy cleanup
-  chrome.alarms.clear(`twitter-timer-${tabId}`);
-  chrome.storage.local.remove([`countdown-${tabId}`, `twitter-timer-${tabId}`]);
+  browserAPI.alarms.clear(`twitter-timer-${tabId}`);
+  browserAPI.storage.local.remove([`countdown-${tabId}`, `twitter-timer-${tabId}`]);
 });
 
 async function handleTwitterTab(tabId, tab) {
@@ -198,7 +201,7 @@ async function handleTwitterTab(tabId, tab) {
   const domain = tab.url.includes("twitter.com") ? "twitter.com" : "x.com";
 
   // Get persistent data
-  const data = await chrome.storage.local.get([
+  const data = await browserAPI.storage.local.get([
     "blockedUntil",
     "dailyUsage",
     "strictModeUntil",
@@ -212,43 +215,43 @@ async function handleTwitterTab(tabId, tab) {
   const activeTwitterTabs = data.activeTwitterTabs || [];
 
   // Get user's daily limit setting
-  const syncSettings = await chrome.storage.sync.get(["dailyLimit"]);
+  const syncSettings = await browserAPI.storage.sync.get(["dailyLimit"]);
   const userDailyLimit = syncSettings.dailyLimit || DAILY_LIMIT;
 
   // Check daily limit
   if (dailyUsage >= userDailyLimit) {
     const message = "今日はもう十分時間を使いました！明日まで待ってください！";
-    chrome.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
-    chrome.tabs.remove(tabId);
+    browserAPI.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
+    browserAPI.tabs.remove(tabId);
     return;
   }
 
   // Check strict mode (triggered after multiple violations)
   if (strictModeUntil > now) {
     const message = "厳格モード中です。違反が多すぎます。";
-    chrome.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
-    chrome.tabs.remove(tabId);
+    browserAPI.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
+    browserAPI.tabs.remove(tabId);
     return;
   }
 
   // Check domain-specific block
   if (blockedUntil[domain] && blockedUntil[domain] > now) {
     const message = getRandomMessage(cooldownMessages);
-    chrome.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
-    chrome.tabs.remove(tabId);
+    browserAPI.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
+    browserAPI.tabs.remove(tabId);
     return;
   }
 
   // Add this tab to active tabs list
   if (!activeTwitterTabs.includes(tabId)) {
     activeTwitterTabs.push(tabId);
-    await chrome.storage.local.set({ activeTwitterTabs });
+    await browserAPI.storage.local.set({ activeTwitterTabs });
   }
 
   // Check if there's an active global session
   if (globalSession && globalSession.endTime > now) {
     // Resume existing global session
-    chrome.tabs.sendMessage(tabId, {
+    browserAPI.tabs.sendMessage(tabId, {
       action: "resumeCountdown",
       endTime: globalSession.endTime,
     });
@@ -256,7 +259,7 @@ async function handleTwitterTab(tabId, tab) {
   }
 
   // Start new global session
-  const settings = await chrome.storage.sync.get(["timeLimit"]);
+  const settings = await browserAPI.storage.sync.get(["timeLimit"]);
   const timeLimit = settings.timeLimit || DEFAULT_TIME_LIMIT;
   const endTime = now + timeLimit;
 
@@ -269,7 +272,7 @@ async function handleTwitterTab(tabId, tab) {
   };
 
   // Store global session data
-  await chrome.storage.local.set({
+  await browserAPI.storage.local.set({
     globalSession: sessionData,
   });
 
@@ -282,20 +285,20 @@ async function handleTwitterTab(tabId, tab) {
     timeLimit: timeLimit,
   });
 
-  // Use chrome.alarms API for global timer
+  // Use browserAPI.alarms API for global timer
   const alarmName = "global-twitter-timer";
-  chrome.alarms.clear(alarmName); // Clear any existing alarm
-  chrome.alarms.create(alarmName, {
+  browserAPI.alarms.clear(alarmName); // Clear any existing alarm
+  browserAPI.alarms.create(alarmName, {
     delayInMinutes: timeLimit / (60 * 1000),
   });
 
   // Store alarm info
-  chrome.storage.local.set({
+  browserAPI.storage.local.set({
     [alarmName]: { message: getRandomMessage(warningMessages) },
   });
 }
 
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+browserAPI.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === "closeTab") {
     const tabId = sender.tab.id;
     const domain = sender.tab.url.includes("twitter.com")
@@ -303,7 +306,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       : "x.com";
 
     // Get current data and update
-    const data = await chrome.storage.local.get([
+    const data = await browserAPI.storage.local.get([
       "blockedUntil",
       "dailyUsage",
       "violationCount",
@@ -314,7 +317,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
     // Send time expired violation notification
     try {
-      await chrome.tabs.sendMessage(tabId, {
+      await browserAPI.tabs.sendMessage(tabId, {
         action: "showViolationNotification",
         violationType: "timeExpired",
         message: "制限時間に到達しました。 (+1点)",
@@ -328,7 +331,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     let cooldownPeriod = COOLDOWN_PERIOD;
     if (violationCount >= 5) {
       // Activate strict mode after 5 violations
-      await chrome.storage.local.set({
+      await browserAPI.storage.local.set({
         strictModeUntil: Date.now() + STRICT_MODE_COOLDOWN,
       });
       cooldownPeriod = STRICT_MODE_COOLDOWN;
@@ -338,7 +341,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
     blockedUntil[domain] = Date.now() + cooldownPeriod;
 
-    await chrome.storage.local.set({
+    await browserAPI.storage.local.set({
       blockedUntil,
       violationCount,
     });
@@ -347,8 +350,8 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     await closeAllTwitterTabs();
 
     // Clear global session
-    chrome.alarms.clear("global-twitter-timer");
-    await chrome.storage.local.remove([
+    browserAPI.alarms.clear("global-twitter-timer");
+    await browserAPI.storage.local.remove([
       "globalSession",
       "global-twitter-timer",
     ]);
@@ -364,7 +367,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
 
 // Handle suspicious activity
 async function handleSuspiciousActivity(request, sender) {
-  const data = await chrome.storage.local.get([
+  const data = await browserAPI.storage.local.get([
     "violationCount",
     "suspiciousActivity",
   ]);
@@ -410,7 +413,7 @@ async function handleSuspiciousActivity(request, sender) {
     // Removed windowBlur and urlManipulation violations
   }
 
-  await chrome.storage.local.set({
+  await browserAPI.storage.local.set({
     violationCount: newViolationCount,
     suspiciousActivity,
   });
@@ -418,7 +421,7 @@ async function handleSuspiciousActivity(request, sender) {
   // Send notification to the tab if violation was added
   if (addedPoints > 0) {
     try {
-      await chrome.tabs.sendMessage(sender.tab.id, {
+      await browserAPI.tabs.sendMessage(sender.tab.id, {
         action: "showViolationNotification",
         violationType: request.type,
         message: violationMessage + ` (+${addedPoints}点)`,
@@ -432,7 +435,7 @@ async function handleSuspiciousActivity(request, sender) {
   // If too many violations, activate extended strict mode
   if (newViolationCount >= 10) {
     // Extended strict mode - no immediate tab closure
-    await chrome.storage.local.set({
+    await browserAPI.storage.local.set({
       strictModeUntil: Date.now() + STRICT_MODE_COOLDOWN * 2, // 4 hours strict mode for 10+ violations
     });
   }
@@ -442,9 +445,9 @@ async function handleSuspiciousActivity(request, sender) {
 // This encourages users to use one tab but doesn't punish multiple tabs harshly
 
 // Handle alarms
-chrome.alarms.onAlarm.addListener(async (alarm) => {
+browserAPI.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === "global-twitter-timer") {
-    const data = await chrome.storage.local.get([
+    const data = await browserAPI.storage.local.get([
       alarm.name,
       "activeTwitterTabs",
     ]);
@@ -455,12 +458,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       // Send warning to all active Twitter tabs
       for (const tabId of activeTwitterTabs) {
         try {
-          const tab = await chrome.tabs.get(tabId);
+          const tab = await browserAPI.tabs.get(tabId);
           if (
             tab &&
             (tab.url.includes("twitter.com") || tab.url.includes("x.com"))
           ) {
-            chrome.tabs.sendMessage(tabId, {
+            browserAPI.tabs.sendMessage(tabId, {
               action: "showWarning",
               message: message,
             });
@@ -471,21 +474,21 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
       }
 
       // Clean up storage
-      chrome.storage.local.remove([alarm.name, "globalSession"]);
+      browserAPI.storage.local.remove([alarm.name, "globalSession"]);
       clearGlobalUsageTracking();
     }
   } else if (alarm.name.startsWith("twitter-timer-")) {
     // Legacy alarm handling
-    const data = await chrome.storage.local.get(alarm.name);
+    const data = await browserAPI.storage.local.get(alarm.name);
     if (data[alarm.name]) {
       const { tabId, message } = data[alarm.name];
 
       try {
-        const tab = await chrome.tabs.get(tabId);
+        const tab = await browserAPI.tabs.get(tabId);
         if (
           tab && (tab.url.includes("twitter.com") || tab.url.includes("x.com"))
         ) {
-          chrome.tabs.sendMessage(tabId, {
+          browserAPI.tabs.sendMessage(tabId, {
             action: "showWarning",
             message: message,
           });
@@ -494,7 +497,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
         // Tab doesn't exist anymore
       }
 
-      chrome.storage.local.remove(alarm.name);
+      browserAPI.storage.local.remove(alarm.name);
     }
   }
 });
@@ -511,7 +514,7 @@ async function startGlobalUsageTracking() {
 
   globalUsageInterval = setInterval(async () => {
     try {
-      const data = await chrome.storage.local.get([
+      const data = await browserAPI.storage.local.get([
         "activeTwitterTabs",
         "globalSession",
         "dailyUsage",
@@ -529,7 +532,7 @@ async function startGlobalUsageTracking() {
       let hasActiveTab = false;
       for (const tabId of activeTwitterTabs) {
         try {
-          const tab = await chrome.tabs.get(tabId);
+          const tab = await browserAPI.tabs.get(tabId);
           if (
             tab &&
             (tab.url.includes("twitter.com") || tab.url.includes("x.com"))
@@ -545,7 +548,7 @@ async function startGlobalUsageTracking() {
       if (hasActiveTab) {
         // Add 1 second to daily usage
         const newUsage = (data.dailyUsage || 0) + 1000;
-        await chrome.storage.local.set({
+        await browserAPI.storage.local.set({
           dailyUsage: newUsage,
           lastUsageUpdate: Date.now(), // Track when usage was last updated
         });
@@ -553,7 +556,7 @@ async function startGlobalUsageTracking() {
         // Save session state periodically (every 5 seconds) for crash recovery
         const now = Date.now();
         if (now - lastUsageSave >= 5000) {
-          await chrome.storage.local.set({
+          await browserAPI.storage.local.set({
             sessionBackup: {
               ...globalSession,
               currentUsage: newUsage,
@@ -564,7 +567,7 @@ async function startGlobalUsageTracking() {
         }
 
         // Check if daily limit exceeded
-        const syncSettings = await chrome.storage.sync.get(["dailyLimit"]);
+        const syncSettings = await browserAPI.storage.sync.get(["dailyLimit"]);
         const userDailyLimit = syncSettings.dailyLimit || DAILY_LIMIT;
         if (newUsage >= userDailyLimit) {
           // Close all Twitter tabs
@@ -590,12 +593,12 @@ function clearGlobalUsageTracking() {
 
 // Broadcast message to all active Twitter tabs
 async function broadcastToAllTwitterTabs(message) {
-  const data = await chrome.storage.local.get(["activeTwitterTabs"]);
+  const data = await browserAPI.storage.local.get(["activeTwitterTabs"]);
   const activeTwitterTabs = data.activeTwitterTabs || [];
 
   for (const tabId of activeTwitterTabs) {
     try {
-      await chrome.tabs.sendMessage(tabId, message);
+      await browserAPI.tabs.sendMessage(tabId, message);
     } catch (error) {
       // Tab might not exist anymore, will be cleaned up
     }
@@ -604,29 +607,29 @@ async function broadcastToAllTwitterTabs(message) {
 
 // Close all Twitter tabs
 async function closeAllTwitterTabs() {
-  const data = await chrome.storage.local.get(["activeTwitterTabs"]);
+  const data = await browserAPI.storage.local.get(["activeTwitterTabs"]);
   const activeTwitterTabs = data.activeTwitterTabs || [];
 
   for (const tabId of activeTwitterTabs) {
     try {
-      await chrome.tabs.remove(tabId);
+      await browserAPI.tabs.remove(tabId);
     } catch (error) {
       // Tab might not exist anymore
     }
   }
 
-  await chrome.storage.local.set({ activeTwitterTabs: [] });
+  await browserAPI.storage.local.set({ activeTwitterTabs: [] });
 }
 
 // Monitor for suspicious activity (extension being disabled/enabled)
-chrome.management.onDisabled.addListener(async (info) => {
-  if (info.id === chrome.runtime.id) {
+browserAPI.management.onDisabled.addListener(async (info) => {
+  if (info.id === browserAPI.runtime.id) {
     // Save current session state before being disabled
-    const data = await chrome.storage.local.get(["globalSession", "violationCount"]);
+    const data = await browserAPI.storage.local.get(["globalSession", "violationCount"]);
     const now = Date.now();
     const newViolationCount = (data.violationCount || 0) + 2;
 
-    await chrome.storage.local.set({
+    await browserAPI.storage.local.set({
       disabledAt: now,
       violationCount: newViolationCount,
       sessionBeforeDisable: data.globalSession, // Preserve session
@@ -639,9 +642,9 @@ chrome.management.onDisabled.addListener(async (info) => {
   }
 });
 
-chrome.management.onEnabled.addListener(async (info) => {
-  if (info.id === chrome.runtime.id) {
-    const data = await chrome.storage.local.get([
+browserAPI.management.onEnabled.addListener(async (info) => {
+  if (info.id === browserAPI.runtime.id) {
+    const data = await browserAPI.storage.local.get([
       "disabledAt",
       "blockedUntil",
       "sessionBeforeDisable",
@@ -656,7 +659,7 @@ chrome.management.onEnabled.addListener(async (info) => {
         data.sessionBeforeDisable &&
         data.sessionBeforeDisable.endTime > Date.now()
       ) {
-        await chrome.storage.local.set({
+        await browserAPI.storage.local.set({
           globalSession: data.sessionBeforeDisable,
         });
       }
@@ -666,7 +669,7 @@ chrome.management.onEnabled.addListener(async (info) => {
         const blockedUntil = data.blockedUntil || {};
         blockedUntil["twitter.com"] = Date.now() + STRICT_MODE_COOLDOWN;
         blockedUntil["x.com"] = Date.now() + STRICT_MODE_COOLDOWN;
-        await chrome.storage.local.set({
+        await browserAPI.storage.local.set({
           blockedUntil,
           strictModeUntil: Date.now() + STRICT_MODE_COOLDOWN,
         });
@@ -677,7 +680,7 @@ chrome.management.onEnabled.addListener(async (info) => {
         const notification = data.pendingViolationNotification;
         for (const tabId of data.activeTwitterTabs) {
           try {
-            await chrome.tabs.sendMessage(tabId, {
+            await browserAPI.tabs.sendMessage(tabId, {
               action: "showViolationNotification",
               violationType: notification.type,
               message: notification.message,
@@ -689,7 +692,7 @@ chrome.management.onEnabled.addListener(async (info) => {
         }
       }
 
-      chrome.storage.local.remove(["disabledAt", "sessionBeforeDisable", "pendingViolationNotification"]);
+      browserAPI.storage.local.remove(["disabledAt", "sessionBeforeDisable", "pendingViolationNotification"]);
     }
   }
 });

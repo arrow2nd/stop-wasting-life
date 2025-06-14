@@ -1,0 +1,17 @@
+{
+  "name": "stop-wasting-life",
+  "version": "1.0.0",
+  "description": "Twitterを一定時間開いていると警告が出て、Twitterのタブを強制的に閉じるブラウザ拡張機能",
+  "scripts": {
+    "build:firefox": "npm run clean:firefox && npm run copy:firefox && npm run package:firefox",
+    "clean:firefox": "rimraf firefox-build firefox-build.zip",
+    "copy:firefox": "mkdir -p firefox-build && cp -r *.js *.html *.png *.svg firefox-build/ && cp manifest_firefox.json firefox-build/manifest.json",
+    "package:firefox": "cd firefox-build && zip -r ../firefox-build.zip * -x '*.git*' 'README*.md' 'manifest_chrome.json' 'package.json'"
+  },
+  "keywords": ["browser-extension", "twitter", "productivity", "time-management"],
+  "author": "arrow2nd",
+  "license": "MIT",
+  "devDependencies": {
+    "rimraf": "^5.0.0"
+  }
+}

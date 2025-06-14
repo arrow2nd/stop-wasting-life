@@ -1,3 +1,6 @@
+// Cross-browser compatibility
+const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+
 let countdownInterval;
 let timerOverlay;
 let vignetteOverlay;
@@ -273,7 +276,7 @@ function resumeCountdown(endTime) {
   countdownInterval = setInterval(updateCountdown, 100);
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+browserAPI.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "startCountdown") {
     startCountdown(request.timeLimit);
   } else if (request.action === "resumeCountdown") {
@@ -295,7 +298,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     lastVignetteUpdate = 0;
 
     alert(request.message);
-    chrome.runtime.sendMessage({ action: "closeTab" });
+    browserAPI.runtime.sendMessage({ action: "closeTab" });
   } else if (request.action === "showBlockedMessage") {
     alert(request.message);
   } else if (request.action === "showViolationNotification") {
@@ -397,7 +400,7 @@ document.addEventListener('visibilitychange', () => {
     
     // Report suspicious behavior if hidden for more than 30 seconds during countdown
     if (hiddenDuration > 30000 && countdownEndTime && countdownEndTime > now) {
-      chrome.runtime.sendMessage({ 
+      browserAPI.runtime.sendMessage({ 
         action: 'reportSuspiciousActivity', 
         type: 'pageHidden',
         duration: hiddenDuration 
@@ -423,7 +426,7 @@ setInterval(() => {
       window.outerWidth - window.innerWidth > threshold) {
     if (!devToolsOpen) {
       devToolsOpen = true;
-      chrome.runtime.sendMessage({ 
+      browserAPI.runtime.sendMessage({ 
         action: 'reportSuspiciousActivity', 
         type: 'devToolsOpen'
       });
@@ -434,7 +437,7 @@ setInterval(() => {
 }, 1000);
 
 // Detect multiple Twitter/X tabs
-chrome.runtime.sendMessage({ action: 'checkMultipleTabs' });
+browserAPI.runtime.sendMessage({ action: 'checkMultipleTabs' });
 
 // Monitor for URL changes (for tracking, not violations)
 let originalUrl = window.location.href;
@@ -454,7 +457,7 @@ document.addEventListener('keydown', (e) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 't' || e.key === 'n')) {
       e.preventDefault();
       e.stopPropagation();
-      chrome.runtime.sendMessage({ 
+      browserAPI.runtime.sendMessage({ 
         action: 'reportSuspiciousActivity', 
         type: 'blockedShortcut',
         key: e.key
