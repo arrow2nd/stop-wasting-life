@@ -25,7 +25,7 @@ function getRandomMessage(messages) {
 
 // Initialize storage on startup
 // Cross-browser compatibility
-const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+const browserAPI = typeof browser !== "undefined" ? browser : chrome;
 
 browserAPI.runtime.onStartup.addListener(initializeStorage);
 browserAPI.runtime.onInstalled.addListener(initializeStorage);
@@ -193,7 +193,10 @@ browserAPI.tabs.onRemoved.addListener(async (tabId) => {
 
   // Legacy cleanup
   browserAPI.alarms.clear(`twitter-timer-${tabId}`);
-  browserAPI.storage.local.remove([`countdown-${tabId}`, `twitter-timer-${tabId}`]);
+  browserAPI.storage.local.remove([
+    `countdown-${tabId}`,
+    `twitter-timer-${tabId}`,
+  ]);
 });
 
 async function handleTwitterTab(tabId, tab) {
@@ -221,7 +224,10 @@ async function handleTwitterTab(tabId, tab) {
   // Check daily limit
   if (dailyUsage >= userDailyLimit) {
     const message = "今日はもう十分時間を使いました！明日まで待ってください！";
-    browserAPI.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
+    browserAPI.tabs.sendMessage(tabId, {
+      action: "showBlockedMessage",
+      message,
+    });
     browserAPI.tabs.remove(tabId);
     return;
   }
@@ -229,7 +235,10 @@ async function handleTwitterTab(tabId, tab) {
   // Check strict mode (triggered after multiple violations)
   if (strictModeUntil > now) {
     const message = "厳格モード中です。違反が多すぎます。";
-    browserAPI.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
+    browserAPI.tabs.sendMessage(tabId, {
+      action: "showBlockedMessage",
+      message,
+    });
     browserAPI.tabs.remove(tabId);
     return;
   }
@@ -237,7 +246,10 @@ async function handleTwitterTab(tabId, tab) {
   // Check domain-specific block
   if (blockedUntil[domain] && blockedUntil[domain] > now) {
     const message = getRandomMessage(cooldownMessages);
-    browserAPI.tabs.sendMessage(tabId, { action: "showBlockedMessage", message });
+    browserAPI.tabs.sendMessage(tabId, {
+      action: "showBlockedMessage",
+      message,
+    });
     browserAPI.tabs.remove(tabId);
     return;
   }
@@ -298,72 +310,74 @@ async function handleTwitterTab(tabId, tab) {
   });
 }
 
-browserAPI.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
-  if (request.action === "closeTab") {
-    const tabId = sender.tab.id;
-    const domain = sender.tab.url.includes("twitter.com")
-      ? "twitter.com"
-      : "x.com";
+browserAPI.runtime.onMessage.addListener(
+  async (request, sender, sendResponse) => {
+    if (request.action === "closeTab") {
+      const tabId = sender.tab.id;
+      const domain = sender.tab.url.includes("twitter.com")
+        ? "twitter.com"
+        : "x.com";
 
-    // Get current data and update
-    const data = await browserAPI.storage.local.get([
-      "blockedUntil",
-      "dailyUsage",
-      "violationCount",
-      "activeTwitterTabs",
-    ]);
-    const blockedUntil = data.blockedUntil || {};
-    const violationCount = (data.violationCount || 0) + 1;
+      // Get current data and update
+      const data = await browserAPI.storage.local.get([
+        "blockedUntil",
+        "dailyUsage",
+        "violationCount",
+        "activeTwitterTabs",
+      ]);
+      const blockedUntil = data.blockedUntil || {};
+      const violationCount = (data.violationCount || 0) + 1;
 
-    // Send time expired violation notification
-    try {
-      await browserAPI.tabs.sendMessage(tabId, {
-        action: "showViolationNotification",
-        violationType: "timeExpired",
-        message: "制限時間に到達しました。 (+1点)",
-        violationCount: violationCount
-      });
-    } catch (error) {
-      // Tab might not exist anymore
-    }
+      // Send time expired violation notification
+      try {
+        await browserAPI.tabs.sendMessage(tabId, {
+          action: "showViolationNotification",
+          violationType: "timeExpired",
+          message: "制限時間に到達しました。 (+1点)",
+          violationCount: violationCount,
+        });
+      } catch (error) {
+        // Tab might not exist anymore
+      }
 
-    // Set block with escalating cooldown
-    let cooldownPeriod = COOLDOWN_PERIOD;
-    if (violationCount >= 5) {
-      // Activate strict mode after 5 violations
+      // Set block with escalating cooldown
+      let cooldownPeriod = COOLDOWN_PERIOD;
+      if (violationCount >= 5) {
+        // Activate strict mode after 5 violations
+        await browserAPI.storage.local.set({
+          strictModeUntil: Date.now() + STRICT_MODE_COOLDOWN,
+        });
+        cooldownPeriod = STRICT_MODE_COOLDOWN;
+      } else if (violationCount >= 3) {
+        cooldownPeriod = COOLDOWN_PERIOD * 2; // Double cooldown
+      }
+
+      blockedUntil[domain] = Date.now() + cooldownPeriod;
+
       await browserAPI.storage.local.set({
-        strictModeUntil: Date.now() + STRICT_MODE_COOLDOWN,
+        blockedUntil,
+        violationCount,
       });
-      cooldownPeriod = STRICT_MODE_COOLDOWN;
-    } else if (violationCount >= 3) {
-      cooldownPeriod = COOLDOWN_PERIOD * 2; // Double cooldown
+
+      // Close ALL Twitter tabs when time limit is reached
+      await closeAllTwitterTabs();
+
+      // Clear global session
+      browserAPI.alarms.clear("global-twitter-timer");
+      await browserAPI.storage.local.remove([
+        "globalSession",
+        "global-twitter-timer",
+      ]);
+      clearGlobalUsageTracking();
+    } else if (request.action === "reportSuspiciousActivity") {
+      // Handle suspicious activity reports
+      await handleSuspiciousActivity(request, sender);
+    } else if (request.action === "checkMultipleTabs") {
+      // This is now handled automatically in handleTwitterTab
+      // Multiple tabs will share the same countdown
     }
-
-    blockedUntil[domain] = Date.now() + cooldownPeriod;
-
-    await browserAPI.storage.local.set({
-      blockedUntil,
-      violationCount,
-    });
-
-    // Close ALL Twitter tabs when time limit is reached
-    await closeAllTwitterTabs();
-
-    // Clear global session
-    browserAPI.alarms.clear("global-twitter-timer");
-    await browserAPI.storage.local.remove([
-      "globalSession",
-      "global-twitter-timer",
-    ]);
-    clearGlobalUsageTracking();
-  } else if (request.action === "reportSuspiciousActivity") {
-    // Handle suspicious activity reports
-    await handleSuspiciousActivity(request, sender);
-  } else if (request.action === "checkMultipleTabs") {
-    // This is now handled automatically in handleTwitterTab
-    // Multiple tabs will share the same countdown
-  }
-});
+  },
+);
 
 // Handle suspicious activity
 async function handleSuspiciousActivity(request, sender) {
@@ -388,7 +402,7 @@ async function handleSuspiciousActivity(request, sender) {
   }
 
   let newViolationCount = violationCount;
-  let violationMessage = '';
+  let violationMessage = "";
   let addedPoints = 0;
 
   // Assign penalty based on activity type
@@ -396,21 +410,24 @@ async function handleSuspiciousActivity(request, sender) {
     case "devToolsOpen":
       addedPoints = 2;
       newViolationCount += addedPoints;
-      violationMessage = '開発者ツールの使用を検出しました。';
+      violationMessage = "開発者ツールの使用を検出しました。";
       break;
     case "pageHidden":
       if (request.duration > 60000) { // Hidden for more than 1 minute
         addedPoints = 1;
         newViolationCount += addedPoints;
-        violationMessage = `ページを${Math.floor(request.duration / 1000)}秒間隠していました。`;
+        violationMessage = `ページを${
+          Math.floor(request.duration / 1000)
+        }秒間隠していました。`;
       }
       break;
     case "blockedShortcut":
       addedPoints = 1;
       newViolationCount += addedPoints;
-      violationMessage = `ショートカットキー（${request.key}）のブロックを検出しました。`;
+      violationMessage =
+        `ショートカットキー（${request.key}）のブロックを検出しました。`;
       break;
-    // Removed windowBlur and urlManipulation violations
+      // Removed windowBlur and urlManipulation violations
   }
 
   await browserAPI.storage.local.set({
@@ -425,7 +442,7 @@ async function handleSuspiciousActivity(request, sender) {
         action: "showViolationNotification",
         violationType: request.type,
         message: violationMessage + ` (+${addedPoints}点)`,
-        violationCount: newViolationCount
+        violationCount: newViolationCount,
       });
     } catch (error) {
       // Tab might not exist anymore
@@ -625,7 +642,10 @@ async function closeAllTwitterTabs() {
 browserAPI.management.onDisabled.addListener(async (info) => {
   if (info.id === browserAPI.runtime.id) {
     // Save current session state before being disabled
-    const data = await browserAPI.storage.local.get(["globalSession", "violationCount"]);
+    const data = await browserAPI.storage.local.get([
+      "globalSession",
+      "violationCount",
+    ]);
     const now = Date.now();
     const newViolationCount = (data.violationCount || 0) + 2;
 
@@ -634,10 +654,10 @@ browserAPI.management.onDisabled.addListener(async (info) => {
       violationCount: newViolationCount,
       sessionBeforeDisable: data.globalSession, // Preserve session
       pendingViolationNotification: {
-        type: 'extensionDisabled',
-        message: '拡張機能の無効化を検出しました。 (+2点)',
-        count: newViolationCount
-      }
+        type: "extensionDisabled",
+        message: "拡張機能の無効化を検出しました。 (+2点)",
+        count: newViolationCount,
+      },
     });
   }
 });
@@ -649,7 +669,7 @@ browserAPI.management.onEnabled.addListener(async (info) => {
       "blockedUntil",
       "sessionBeforeDisable",
       "pendingViolationNotification",
-      "activeTwitterTabs"
+      "activeTwitterTabs",
     ]);
     if (data.disabledAt) {
       const disabledDuration = Date.now() - data.disabledAt;
@@ -684,7 +704,7 @@ browserAPI.management.onEnabled.addListener(async (info) => {
               action: "showViolationNotification",
               violationType: notification.type,
               message: notification.message,
-              violationCount: notification.count
+              violationCount: notification.count,
             });
           } catch (error) {
             // Tab might not exist anymore
@@ -692,7 +712,11 @@ browserAPI.management.onEnabled.addListener(async (info) => {
         }
       }
 
-      browserAPI.storage.local.remove(["disabledAt", "sessionBeforeDisable", "pendingViolationNotification"]);
+      browserAPI.storage.local.remove([
+        "disabledAt",
+        "sessionBeforeDisable",
+        "pendingViolationNotification",
+      ]);
     }
   }
 });

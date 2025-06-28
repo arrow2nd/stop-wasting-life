@@ -1,5 +1,5 @@
 // Cross-browser compatibility
-const browserAPI = typeof browser !== 'undefined' ? browser : chrome;
+const browserAPI = typeof browser !== "undefined" ? browser : chrome;
 
 let countdownInterval;
 let timerOverlay;
@@ -102,11 +102,11 @@ function updateVignette(remainingSeconds) {
 }
 
 function isTwitterDarkMode() {
-  const cookies = document.cookie.split(';');
+  const cookies = document.cookie.split(";");
   for (let cookie of cookies) {
-    const [name, value] = cookie.trim().split('=');
-    if (name === 'night_mode') {
-      return value !== '0';
+    const [name, value] = cookie.trim().split("=");
+    if (name === "night_mode") {
+      return value !== "0";
     }
   }
   return false;
@@ -120,7 +120,7 @@ function createTimerOverlay() {
 
   // Detect Twitter dark mode from cookie
   const isDarkMode = isTwitterDarkMode();
-  const timerColor = isDarkMode ? '#ffffff' : '#000000';
+  const timerColor = isDarkMode ? "#ffffff" : "#000000";
 
   // Create overlay element
   timerOverlay = document.createElement("div");
@@ -194,7 +194,7 @@ function startCountdown(timeLimit) {
       // Change color when under 30 seconds
       const seconds = Math.floor(remainingTime / 1000);
       const isDarkMode = isTwitterDarkMode();
-      
+
       if (seconds <= 30) {
         timerOverlay.style.color = "#FF6B6B";
       } else {
@@ -216,7 +216,7 @@ function startCountdown(timeLimit) {
 function resumeCountdown(endTime) {
   const now = Date.now();
   const remainingTime = Math.max(0, endTime - now);
-  
+
   if (remainingTime <= 0) {
     // Countdown already finished
     return;
@@ -257,7 +257,7 @@ function resumeCountdown(endTime) {
       // Change color when under 30 seconds
       const seconds = Math.floor(remainingTime / 1000);
       const isDarkMode = isTwitterDarkMode();
-      
+
       if (seconds <= 30) {
         timerOverlay.style.color = "#FF6B6B";
       } else {
@@ -303,7 +303,11 @@ browserAPI.runtime.onMessage.addListener((request, sender, sendResponse) => {
     alert(request.message);
   } else if (request.action === "showViolationNotification") {
     // Show violation notification
-    showViolationNotification(request.violationType, request.message, request.violationCount);
+    showViolationNotification(
+      request.violationType,
+      request.message,
+      request.violationCount,
+    );
   }
 });
 
@@ -315,12 +319,12 @@ function checkForUrlChange() {
   if (window.location.href !== currentUrl) {
     currentUrl = window.location.href;
     isNavigating = true;
-    
+
     // Clear any existing timeout
     if (urlCheckTimeout) {
       clearTimeout(urlCheckTimeout);
     }
-    
+
     // If countdown is active, preserve it across navigation
     if (countdownEndTime && countdownInterval) {
       const remainingTime = Math.max(0, countdownEndTime - Date.now());
@@ -347,22 +351,22 @@ function setupNavigationObserver() {
   if (navigationObserver) {
     navigationObserver.disconnect();
   }
-  
+
   navigationObserver = new MutationObserver((mutations) => {
     // Check if the page content has significantly changed
-    const hasSignificantChange = mutations.some(mutation => 
-      mutation.type === 'childList' && 
+    const hasSignificantChange = mutations.some((mutation) =>
+      mutation.type === "childList" &&
       mutation.addedNodes.length > 5 // Threshold for significant DOM changes
     );
-    
+
     if (hasSignificantChange) {
       checkForUrlChange();
     }
   });
-  
+
   navigationObserver.observe(document.body, {
     childList: true,
-    subtree: true
+    subtree: true,
   });
 }
 
@@ -370,8 +374,8 @@ function setupNavigationObserver() {
 setInterval(checkForUrlChange, 500);
 
 // Start observing when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', setupNavigationObserver);
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", setupNavigationObserver);
 } else {
   setupNavigationObserver();
 }
@@ -388,33 +392,33 @@ let devToolsOpen = false;
 let windowFocused = true;
 
 // Detect when page becomes hidden (tab switching, minimizing, etc.)
-document.addEventListener('visibilitychange', () => {
+document.addEventListener("visibilitychange", () => {
   const now = Date.now();
-  
+
   if (document.hidden) {
     lastVisibilityChange = now;
   } else {
     // If page was hidden for significant time, add penalty
     const hiddenDuration = now - lastVisibilityChange;
     pageHiddenTime += hiddenDuration;
-    
+
     // Report suspicious behavior if hidden for more than 30 seconds during countdown
     if (hiddenDuration > 30000 && countdownEndTime && countdownEndTime > now) {
-      browserAPI.runtime.sendMessage({ 
-        action: 'reportSuspiciousActivity', 
-        type: 'pageHidden',
-        duration: hiddenDuration 
+      browserAPI.runtime.sendMessage({
+        action: "reportSuspiciousActivity",
+        type: "pageHidden",
+        duration: hiddenDuration,
       });
     }
   }
 });
 
 // Detect window focus changes (for tracking, not violations)
-window.addEventListener('focus', () => {
+window.addEventListener("focus", () => {
   windowFocused = true;
 });
 
-window.addEventListener('blur', () => {
+window.addEventListener("blur", () => {
   windowFocused = false;
   // Window blur is no longer a violation
 });
@@ -422,13 +426,15 @@ window.addEventListener('blur', () => {
 // Detect potential developer tools usage
 const threshold = 160;
 setInterval(() => {
-  if (window.outerHeight - window.innerHeight > threshold || 
-      window.outerWidth - window.innerWidth > threshold) {
+  if (
+    window.outerHeight - window.innerHeight > threshold ||
+    window.outerWidth - window.innerWidth > threshold
+  ) {
     if (!devToolsOpen) {
       devToolsOpen = true;
-      browserAPI.runtime.sendMessage({ 
-        action: 'reportSuspiciousActivity', 
-        type: 'devToolsOpen'
+      browserAPI.runtime.sendMessage({
+        action: "reportSuspiciousActivity",
+        type: "devToolsOpen",
       });
     }
   } else {
@@ -437,7 +443,7 @@ setInterval(() => {
 }, 1000);
 
 // Detect multiple Twitter/X tabs
-browserAPI.runtime.sendMessage({ action: 'checkMultipleTabs' });
+browserAPI.runtime.sendMessage({ action: "checkMultipleTabs" });
 
 // Monitor for URL changes (for tracking, not violations)
 let originalUrl = window.location.href;
@@ -451,16 +457,19 @@ const urlObserver = new MutationObserver(() => {
 urlObserver.observe(document, { subtree: true, childList: true });
 
 // Block certain key combinations that could be used to circumvent
-document.addEventListener('keydown', (e) => {
+document.addEventListener("keydown", (e) => {
   // Block Ctrl+W (close tab), Ctrl+T (new tab), etc. during active countdown
   if (countdownEndTime && countdownEndTime > Date.now()) {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'w' || e.key === 't' || e.key === 'n')) {
+    if (
+      (e.ctrlKey || e.metaKey) &&
+      (e.key === "w" || e.key === "t" || e.key === "n")
+    ) {
       e.preventDefault();
       e.stopPropagation();
-      browserAPI.runtime.sendMessage({ 
-        action: 'reportSuspiciousActivity', 
-        type: 'blockedShortcut',
-        key: e.key
+      browserAPI.runtime.sendMessage({
+        action: "reportSuspiciousActivity",
+        type: "blockedShortcut",
+        key: e.key,
       });
       return false;
     }
@@ -470,36 +479,36 @@ document.addEventListener('keydown', (e) => {
 // Violation notification system
 function showViolationNotification(violationType, message, violationCount) {
   // Create notification element
-  const notification = document.createElement('div');
-  notification.id = 'stop-wasting-life-violation-notification';
-  
+  const notification = document.createElement("div");
+  notification.id = "stop-wasting-life-violation-notification";
+
   // Get violation type in Japanese
   const violationTypeJa = {
-    'devToolsOpen': '開発者ツールの使用',
-    'pageHidden': 'ページの非表示',
-    'windowBlur': 'ウィンドウのフォーカス外し',
-    'urlManipulation': 'URL操作の試み',
-    'blockedShortcut': 'ショートカットキーのブロック',
-    'extensionDisabled': '拡張機能の無効化',
-    'timeExpired': '制限時間到達'
-  }[violationType] || '不正行為';
-  
+    "devToolsOpen": "開発者ツールの使用",
+    "pageHidden": "ページの非表示",
+    "windowBlur": "ウィンドウのフォーカス外し",
+    "urlManipulation": "URL操作の試み",
+    "blockedShortcut": "ショートカットキーのブロック",
+    "extensionDisabled": "拡張機能の無効化",
+    "timeExpired": "制限時間到達",
+  }[violationType] || "不正行為";
+
   // Determine severity based on violation count
   let bgColor, borderColor;
   if (violationCount >= 10) {
-    bgColor = 'rgba(139, 0, 0, 0.95)'; // Dark red
-    borderColor = '#FF0000';
+    bgColor = "rgba(139, 0, 0, 0.95)"; // Dark red
+    borderColor = "#FF0000";
   } else if (violationCount >= 5) {
-    bgColor = 'rgba(255, 140, 0, 0.95)'; // Dark orange
-    borderColor = '#FF8C00';
+    bgColor = "rgba(255, 140, 0, 0.95)"; // Dark orange
+    borderColor = "#FF8C00";
   } else if (violationCount >= 3) {
-    bgColor = 'rgba(255, 165, 0, 0.95)'; // Orange
-    borderColor = '#FFA500';
+    bgColor = "rgba(255, 165, 0, 0.95)"; // Orange
+    borderColor = "#FFA500";
   } else {
-    bgColor = 'rgba(255, 215, 0, 0.95)'; // Gold
-    borderColor = '#FFD700';
+    bgColor = "rgba(255, 215, 0, 0.95)"; // Gold
+    borderColor = "#FFD700";
   }
-  
+
   notification.style.cssText = `
     position: fixed;
     top: 20px;
@@ -517,27 +526,39 @@ function showViolationNotification(violationType, message, violationCount) {
     animation: slideIn 0.3s ease-out, shake 0.5s ease-in-out 0.3s;
     cursor: pointer;
   `;
-  
+
   notification.innerHTML = `
     <div style="font-weight: bold; font-size: 18px; margin-bottom: 10px;">⚠️ 違反検出</div>
     <div style="margin-bottom: 8px;">種類: ${violationTypeJa}</div>
     <div style="margin-bottom: 12px;">${message}</div>
     <div style="font-size: 14px; opacity: 0.9;">累計違反回数: ${violationCount}回</div>
-    ${violationCount >= 10 ? '<div style="font-size: 14px; margin-top: 8px; font-weight: bold;">⚡ 10回以上の違反により4時間の厳格モードが適用されます</div>' : ''}
-    ${violationCount >= 5 && violationCount < 10 ? '<div style="font-size: 14px; margin-top: 8px;">🔒 5回以上の違反により厳格モードが適用されます</div>' : ''}
-    ${violationCount >= 3 && violationCount < 5 ? '<div style="font-size: 14px; margin-top: 8px;">⏰ 3回以上の違反によりクールダウンが延長されます</div>' : ''}
+    ${
+    violationCount >= 10
+      ? '<div style="font-size: 14px; margin-top: 8px; font-weight: bold;">⚡ 10回以上の違反により4時間の厳格モードが適用されます</div>'
+      : ""
+  }
+    ${
+    violationCount >= 5 && violationCount < 10
+      ? '<div style="font-size: 14px; margin-top: 8px;">🔒 5回以上の違反により厳格モードが適用されます</div>'
+      : ""
+  }
+    ${
+    violationCount >= 3 && violationCount < 5
+      ? '<div style="font-size: 14px; margin-top: 8px;">⏰ 3回以上の違反によりクールダウンが延長されます</div>'
+      : ""
+  }
   `;
-  
+
   // Add click to dismiss
-  notification.addEventListener('click', () => {
-    notification.style.animation = 'slideOut 0.3s ease-in';
+  notification.addEventListener("click", () => {
+    notification.style.animation = "slideOut 0.3s ease-in";
     setTimeout(() => notification.remove(), 300);
   });
-  
+
   // Add animations
-  if (!document.getElementById('stop-wasting-life-violation-styles')) {
-    const style = document.createElement('style');
-    style.id = 'stop-wasting-life-violation-styles';
+  if (!document.getElementById("stop-wasting-life-violation-styles")) {
+    const style = document.createElement("style");
+    style.id = "stop-wasting-life-violation-styles";
     style.textContent = `
       @keyframes slideIn {
         from {
@@ -567,13 +588,13 @@ function showViolationNotification(violationType, message, violationCount) {
     `;
     document.head.appendChild(style);
   }
-  
+
   document.body.appendChild(notification);
-  
+
   // Auto-remove after 10 seconds
   setTimeout(() => {
-    if (document.getElementById('stop-wasting-life-violation-notification')) {
-      notification.style.animation = 'slideOut 0.3s ease-in';
+    if (document.getElementById("stop-wasting-life-violation-notification")) {
+      notification.style.animation = "slideOut 0.3s ease-in";
       setTimeout(() => notification.remove(), 300);
     }
   }, 10000);
@@ -600,4 +621,3 @@ window.addEventListener("beforeunload", () => {
     urlObserver.disconnect();
   }
 });
-
