@@ -4,7 +4,7 @@ const DAILY_LIMIT = 15 * 60 * 1000; // 15 minutes daily limit
 const STRICT_MODE_COOLDOWN = 2 * 60 * 60 * 1000; // 2 hours strict cooldown
 
 const warningMessages = [
-  "こんなもんで人生無駄にしすんなよ！",
+  "こんなもんで人生無駄にすんなよ！",
   "時間は有限だぞ！Twitterなんか見てる場合か！",
   "SNS中毒は人生の敵だ！今すぐ閉じろ！",
   "もっと有意義なことに時間を使え！",
