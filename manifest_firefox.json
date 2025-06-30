@@ -1,7 +1,7 @@
 {
   "manifest_version": 2,
   "name": "STOP WASTING LIFE",
-  "version": "1.1",
+  "version": "1.2",
   "description": "Twitterを一定時間開いていると警告が出て、Twitterのタブを強制的に閉じます。",
   "permissions": [
     "tabs",
@@ -43,4 +43,3 @@
     }
   }
 }
-
