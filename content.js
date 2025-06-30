@@ -398,18 +398,9 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     lastVisibilityChange = now;
   } else {
-    // If page was hidden for significant time, add penalty
+    // If page was hidden for significant time, track it
     const hiddenDuration = now - lastVisibilityChange;
     pageHiddenTime += hiddenDuration;
-
-    // Report suspicious behavior if hidden for more than 30 seconds during countdown
-    if (hiddenDuration > 30000 && countdownEndTime && countdownEndTime > now) {
-      browserAPI.runtime.sendMessage({
-        action: "reportSuspiciousActivity",
-        type: "pageHidden",
-        duration: hiddenDuration,
-      });
-    }
   }
 });
 
@@ -456,25 +447,6 @@ const urlObserver = new MutationObserver(() => {
 
 urlObserver.observe(document, { subtree: true, childList: true });
 
-// Block certain key combinations that could be used to circumvent
-document.addEventListener("keydown", (e) => {
-  // Block Ctrl+W (close tab), Ctrl+T (new tab), etc. during active countdown
-  if (countdownEndTime && countdownEndTime > Date.now()) {
-    if (
-      (e.ctrlKey || e.metaKey) &&
-      (e.key === "w" || e.key === "t" || e.key === "n")
-    ) {
-      e.preventDefault();
-      e.stopPropagation();
-      browserAPI.runtime.sendMessage({
-        action: "reportSuspiciousActivity",
-        type: "blockedShortcut",
-        key: e.key,
-      });
-      return false;
-    }
-  }
-});
 
 // Violation notification system
 function showViolationNotification(violationType, message, violationCount) {
